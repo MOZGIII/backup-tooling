@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+
+LOCAL_DIR="$1"
+REMOTE="$2"
+
+IFS=: read SSH_HOST REMOTE_DIR <<< "$REMOTE"
+
+if [[ -z "$LOCAL_DIR" || -z "$SSH_HOST" || -z "$REMOTE_DIR" ]]; then
+  echo "Usage: $0 local-dir user@host:remote-dir"
+  exit 2
+fi
+
+# Capture current date
+DATE="$(date +%Y-%m-%d_%H-%M-%S_%N)"
+
+# Capture random number
+RANGE=32767
+NUMBER="$RANDOM"
+
+LASTEST_BACKUP_DIR="$REMOTE_DIR/latest"
+CURRENT_BACKUP_DIR="$REMOTE_DIR/${DATE}_${NUMBER}"
+
+echo "Executing with the following arguments"
+echo "  Local dir:    $LOCAL_DIR"
+echo "  SSH address:  $SSH_HOST"
+echo "  Remote dir:   $REMOTE_DIR"
+echo
+echo "Derived options"
+echo "  Latest backup (sync) dir: $LASTEST_BACKUP_DIR"
+echo "  Snapshot backup on remote host: $CURRENT_BACKUP_DIR"
+echo
+echo "Other options"
+echo "  Timestamp: $DATE"
+echo "  Random number: $NUMBER"
+
+set -x
+
+# Sync remote and local directories.
+rsync \
+  --archive \
+  --delete \
+  --progress \
+  "$LOCAL_DIR" \
+  "$SSH_HOST:$LASTEST_BACKUP_DIR"
+
+# Copy latest version to provide previous backups in addition
+# to the last one.
+# Create hardlinks (`--link` option) to decrease disk space usage.
+ssh "$SSH_HOST" cp \
+  --archive \
+  --link \
+  "$LASTEST_BACKUP_DIR" \
+  "$CURRENT_BACKUP_DIR"
